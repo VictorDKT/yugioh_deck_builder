@@ -1,7 +1,9 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
+const protobuf = require('protobufjs');
 const router = express.Router();
 const fs = require("fs");
+const path = require('path');
 const {
   downloadImage,
   getImageBase64,
@@ -23,6 +25,18 @@ const { insertCard, deleteCardsFromDeck } = require("./Controller/Card");
 const { insertUser, getUserByLogin, updateUserToken } = require("./Controller/User");
 
 const saltRounds = 10;
+
+const protoPath = path.join(__dirname, 'message.proto');
+let Card, CardList, ApiResponse;
+
+protobuf.load(protoPath, (err, root) => {
+  if (err) {
+    throw err;
+  }
+  Card = root.lookupType('Card');
+  CardList = root.lookupType('CardList');
+  ApiResponse = root.lookupType('ApiResponse');
+});
 
 router.get("/list", async (req, res) => {
   const { limit = 10, offset = 0, name, response_format = "json" } = req.query;
@@ -58,6 +72,8 @@ router.get("/list", async (req, res) => {
           level: card.level,
           race: card.race,
           attribute: card.attribute,
+          scale: card.scale, 
+          linkval: card.linkval,
           img: response,
         };
       } else {
@@ -79,20 +95,69 @@ router.get("/list", async (req, res) => {
           level: card.level,
           race: card.race,
           attribute: card.attribute,
+          scale: card.scale, 
+          linkval: card.linkval,
           img: response,
         };
       }
     });
     const result = await Promise.all(promises);
-    return formatResponse({
-        data: result,
-        success: true,
-    }, response_format, res);
+    /*return formatResponse({
+      data: result,
+      total_pages: data.meta.total_pages,
+      success: true,
+    }, response_format, res);*/
+    const cards = result.map(payload => {
+      const errMsg = Card.verify(payload);
+      if (errMsg) {
+        res.status(400).send(errMsg);
+        return null;
+      }
+      return Card.create(payload);
+    }).filter(message => message !== null);
+    const cardListPayload = { cards };
+    const cardListMessage = CardList.create(cardListPayload);
+
+    const apiResponsePayload = {
+      success: true,
+      total_pages: data.meta.total_pages,
+      data: cardListMessage
+    };
+    const apiResponseMessage = ApiResponse.create(apiResponsePayload);
+
+    const buffer = ApiResponse.encode(apiResponseMessage).finish();
+
+    res.setHeader('Content-Type', 'application/x-protobuf');
+    res.send(buffer);
   } else {
-    return formatResponse({
-        data: [],
-        success: true,
-    }, response_format, res);
+    const result = []
+    /*return formatResponse({
+      data: [],
+      success: true,
+      total_pages: data.meta.total_pages,
+    }, response_format, res);*/
+    const cards = result.map(payload => {
+      const errMsg = Card.verify(payload);
+      if (errMsg) {
+        res.status(400).send(errMsg);
+        return null;
+      }
+      return Card.create(payload);
+    }).filter(message => message !== null);
+    const cardListPayload = { cards };
+    const cardListMessage = CardList.create(cardListPayload);
+
+    const apiResponsePayload = {
+      success: true,
+      total_pages: data.meta.total_pages,
+      data: cardListMessage
+    };
+    const apiResponseMessage = ApiResponse.create(apiResponsePayload);
+
+    const buffer = ApiResponse.encode(apiResponseMessage).finish();
+
+    res.setHeader('Content-Type', 'application/x-protobuf');
+    res.send(buffer);
   }
 });
 

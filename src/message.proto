@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+// Definição da mensagem Card
+message Card {
+  // Código do cartão, número de 8 dígitos
+  int32 card_code = 1;
+  
+  // Nome do cartão
+  string name = 2;
+  
+  // Tipo do cartão
+  string type = 3;
+  
+  // Tipo de frame do cartão
+  string frameType = 4;
+  
+  // Descrição do cartão
+  string desc = 5;
+  
+  // Ataque do cartão (opcional, número de 4 dígitos)
+  // A anotação `optional` não é necessária em proto3, pois todos os campos são opcionais por padrão
+  int32 atk = 6; 
+  
+  // Defesa do cartão (opcional, número de 4 dígitos)
+  int32 def = 7; 
+  
+  // Nível do cartão (opcional, número de 1 a 12)
+  int32 level = 8; 
+  
+  // Raça do cartão
+  string race = 9;
+  
+  // Atributo do cartão (opcional)
+  string attribute = 10;
+  
+  // Escala do cartão (opcional)
+  int32 scale = 11;
+  
+  // Valor de link do cartão (opcional)
+  int32 linkval = 12;
+  
+  // Imagem do cartão em base64
+  string img = 13;
+}
+
+message CardList {
+  repeated Card cards = 1;
+}
+
+message ApiResponse {
+  bool success = 1;
+  int32 total_pages = 2;
+  CardList data = 3;
+}
