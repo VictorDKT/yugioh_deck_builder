@@ -10,7 +10,7 @@ async function createTableDecks() {
 
 async function listDecks(deck) {
     const db = await openDb();
-    let query = `SELECT * FROM decks ORDER BY name LIMIT ? OFFSET ?`;
+    let query = `SELECT decks.*, users.login FROM decks JOIN users ON decks.user_id = users.id ORDER BY name LIMIT ? OFFSET ?`;
     let countQuery = `SELECT COUNT(*) AS total_decks FROM decks`;
     let params = [deck.limit, deck.offset];
     let countParams = [];
@@ -46,10 +46,30 @@ async function insertDeck(deck) {
     return result.lastID;
 }
 
+async function deleteCardsFromDeck(deck) {
+    const db = await openDb();
+    
+    const result = await db.run(
+        `DELETE * FROM cards WHERE cards.deck_id = ?`, [deck.id]
+    );
+
+    return result.lastID;
+}
+
+async function updateDeck(deck) {
+    const db = await openDb();
+    
+    const result = await db.run(
+        `UPDATE decks SET name = ? WHERE decks.id = ?`, [deck.name, deck.id]
+    );
+
+    return result.lastID;
+}
+
 async function getDeck(deck) {
     const db = await openDb();
     const result = await db.all(
-        `SELECT decks.id, decks.user_id, decks.name AS deck_name, cards.* FROM decks JOIN cards ON decks.id = cards.deck_id JOIN users ON decks.user_id = users.id WHERE decks.id = ?;`, [deck.id]
+        `SELECT decks.id, decks.user_id, decks.user_id, decks.name AS deck_name, cards.* FROM decks JOIN cards ON decks.id = cards.deck_id JOIN users ON decks.user_id = users.id WHERE decks.id = ?;`, [deck.id]
     );
 
     return result;
@@ -82,4 +102,6 @@ module.exports = {
     deleteDeck,
     listDecks,
     getDeckById,
+    deleteCardsFromDeck,
+    updateDeck,
 }

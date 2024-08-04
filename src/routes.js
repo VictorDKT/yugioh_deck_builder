@@ -20,6 +20,7 @@ const {
   listDecks,
   listUserDecks,
   getDeckById,
+  updateDeck,
 } = require("./Controller/Deck");
 const { insertCard, deleteCardsFromDeck } = require("./Controller/Card");
 const { insertUser, getUserByLogin, updateUserToken } = require("./Controller/User");
@@ -39,7 +40,7 @@ protobuf.load(protoPath, (err, root) => {
 });
 
 router.get("/list", async (req, res) => {
-  const { limit = 10, offset = 0, name, response_format = "json" } = req.query;
+  const { limit = 10, offset = 0, name } = req.query;
   let reqUrl = `https://db.ygoprodeck.com/api/v7/cardinfo.php?language=pt&sort=name&num=${limit}&offset=${offset}${
     name ? `&fname=${name}` : ""
   }`;
@@ -56,13 +57,8 @@ router.get("/list", async (req, res) => {
         );
         const response = getImageBase64(card.id);
 
-        //card.desc = card.desc.replaceAll("\n", ". ");
-        //card.desc = card.desc.replaceAll(/\\/g, '');
-        //card.name = card.name.replaceAll("\n", ". ");
-        //card.name = card.name.replaceAll(/\\/g, '');
-
         return {
-          card_code: card.card_code,
+          cardCode: card.id,
           name: card.name,
           type: card.type,
           frameType: card.frameType,
@@ -79,13 +75,8 @@ router.get("/list", async (req, res) => {
       } else {
         const response = getImageBase64(card.id);
 
-        //card.desc = card.desc.replaceAll("\n", ". ");
-        //card.desc = card.desc.replaceAll(/\\/g, '');
-        //card.name = card.name.replaceAll("\n", ". ");
-        //card.name = card.name.replaceAll(/\\/g, '');
-
         return {
-          card_code: card.card_code,
+          cardCode: card.id,
           name: card.name,
           type: card.type,
           frameType: card.frameType,
@@ -102,11 +93,6 @@ router.get("/list", async (req, res) => {
       }
     });
     const result = await Promise.all(promises);
-    /*return formatResponse({
-      data: result,
-      total_pages: data.meta.total_pages,
-      success: true,
-    }, response_format, res);*/
     const cards = result.map(payload => {
       const errMsg = Card.verify(payload);
       if (errMsg) {
@@ -120,22 +106,17 @@ router.get("/list", async (req, res) => {
 
     const apiResponsePayload = {
       success: true,
-      total_pages: data.meta.total_pages,
+      total: data.meta.total_pages*limit,
       data: cardListMessage
     };
     const apiResponseMessage = ApiResponse.create(apiResponsePayload);
 
     const buffer = ApiResponse.encode(apiResponseMessage).finish();
-
-    res.setHeader('Content-Type', 'application/x-protobuf');
-    res.send(buffer);
+    
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.send(buffer.toString('hex'));
   } else {
     const result = []
-    /*return formatResponse({
-      data: [],
-      success: true,
-      total_pages: data.meta.total_pages,
-    }, response_format, res);*/
     const cards = result.map(payload => {
       const errMsg = Card.verify(payload);
       if (errMsg) {
@@ -149,7 +130,7 @@ router.get("/list", async (req, res) => {
 
     const apiResponsePayload = {
       success: true,
-      total_pages: data.meta.total_pages,
+      total: 0,
       data: cardListMessage
     };
     const apiResponseMessage = ApiResponse.create(apiResponsePayload);
@@ -157,7 +138,7 @@ router.get("/list", async (req, res) => {
     const buffer = ApiResponse.encode(apiResponseMessage).finish();
 
     res.setHeader('Content-Type', 'application/x-protobuf');
-    res.send(buffer);
+    res.send(buffer.toString('hex'))
   }
 });
 
@@ -208,6 +189,49 @@ router.post("/deck", authenticateToken, async (req, res) => {
   }, response_format, res);
 });
 
+router.put("/deck/:id", authenticateToken, async (req, res) => {
+  const { response_format = "json" } = req.query;
+  const { card_list, name } = req.body;
+  const { id } = req.params;
+  const user_id = req.user.id;
+  const isValidCardList = checkIsValidCardList(card_list);
+
+  if (!isValidCardList) {
+    return formatResponse({
+      success: false,
+      error: "Invalid cardlist format",
+    }, response_format, res);
+  }
+
+  if (!name) {
+    return formatResponse({
+      success: false,
+      error: "Name is a required property",
+    }, response_format, res);
+  }
+
+  const deckExists = await getDeckById({ id });
+
+  if (deckExists && deckExists.length > 0) {
+    await updateDeck({ id, name });
+    await deleteCardsFromDeck({ id });
+
+    card_list.forEach(async (card) => {
+      await insertCard({ ...card, deck_id: id });
+    });
+  
+    return formatResponse({
+      data: "Deck updated successfully",
+      success: true,
+    }, response_format, res);
+  } else {
+    return formatResponse({
+      success: false,
+      error: "Deck not exists",
+    }, response_format, res);
+  }
+});
+
 router.delete("/deck/:id", authenticateToken, async (req, res) => {
   const { response_format = "json" } = req.query;
   const user_id = req.user.id;
@@ -238,14 +262,11 @@ router.get("/deck/:id", async (req, res) => {
 
   if (result && result.length > 0) {
     const deck = {
+      user_id: result[0].user_id,
       name: result[0].deck_name,
       cards: [],
     };
     const formattedData = result.map((card) => {
-      //card.desc = card.desc.replaceAll("\n", ". ");
-      //card.desc = card.desc.replaceAll(/\\/g, '');
-      //card.name = card.name.replaceAll("\n", ". ");
-      //card.name = card.name.replaceAll(/\\/g, '');
 
       return card;
     });
@@ -278,7 +299,7 @@ router.post("/user", async (req, res) => {
     }, response_format, res);
   } else {
     return formatResponse({
-      success: true,
+      success: false,
       data: "Login already exists",
     }, response_format, res);
   }
@@ -300,19 +321,20 @@ router.post("/login", async (req, res) => {
       return formatResponse({
         success: true,
         data: {
+          id: user.id,
           login,
           token
         },
       }, response_format, res);
     } else {
       return formatResponse({
-        success: true,
+        success: false,
         data: "Invalid password",
       }, response_format, res);
     }
   } else {
     return formatResponse({
-      success: true,
+      success: false,
       data: "User not exists",
     }, response_format, res);
   }
