@@ -10,25 +10,26 @@ async function createTableDecks() {
 
 async function listDecks(deck) {
     const db = await openDb();
-    let query = `SELECT decks.*, users.login FROM decks JOIN users ON decks.user_id = users.id ORDER BY name LIMIT ? OFFSET ?`;
+    let query = `SELECT decks.*, users.login FROM decks JOIN users ON decks.user_id = users.id`;
     let countQuery = `SELECT COUNT(*) AS total_decks FROM decks`;
-    let params = [deck.limit, deck.offset];
+    let params = [];
     let countParams = [];
 
     if (deck.name) {
-        query += " WHERE name LIKE ?";
-        params.push(`%${deck.name}%`);
-
+        query += " WHERE decks.name LIKE ?";
         countQuery += " WHERE name LIKE ?";
+        params.push(`%${deck.name}%`);
         countParams.push(`%${deck.name}%`);
     }
+
+    query += " ORDER BY decks.name LIMIT ? OFFSET ?";
+    params.push(deck.limit, deck.offset);
 
     const result = await db.all(query, params);
     const total = await db.all(countQuery, countParams);
 
-    return {data: result, total: total[0].total_decks};
+    return { data: result, total: total[0].total_decks };
 }
-
 async function listUserDecks(deck) {
     const db = await openDb();
     const result = await db.all(`SELECT decks.*, users.login FROM decks JOIN users ON decks.user_id = users.id WHERE decks.user_id = ? ORDER BY name`, [deck.user_id]);
