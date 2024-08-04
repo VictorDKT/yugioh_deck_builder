@@ -154,7 +154,7 @@ router.get("/user_decks", authenticateToken, async (req, res) => {
   const user_id = req.user.id;
   const result = await listUserDecks({ user_id });
 
-  return formatResponse(result, response_format, res);
+  return formatResponse({success: true, data: result}, response_format, res);
 });
 
 router.post("/deck", authenticateToken, async (req, res) => {

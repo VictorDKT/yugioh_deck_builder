@@ -31,7 +31,7 @@ async function listDecks(deck) {
 
 async function listUserDecks(deck) {
     const db = await openDb();
-    const result = await db.all(`SELECT * FROM decks WHERE decks.user_id = ? ORDER BY name`, [deck.user_id]);
+    const result = await db.all(`SELECT decks.*, users.login FROM decks JOIN users ON decks.user_id = users.id WHERE decks.user_id = ? ORDER BY name`, [deck.user_id]);
 
     return result;
 }
